@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import javax.validation.constraints.NotEmpty;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,6 +19,7 @@ public class Member {
     @Column(name = "memeber_id") // name 지정안하면 변수이름이 칼럼 name이 됨
     private Long id;
 
+//    @NotEmpty
     private String name;
 
     @Embedded
