@@ -1,16 +1,14 @@
 package jpabook.jpashop.api;
 
-import jpabook.jpashop.domain.Address;
 import jpabook.jpashop.domain.Order;
-import jpabook.jpashop.domain.OrderStatus;
 import jpabook.jpashop.repository.OrderRepository;
 import jpabook.jpashop.repository.OrderSearch;
-import lombok.Data;
+import jpabook.jpashop.repository.order.simplequery.OrderSimpleQueryDto;
+import jpabook.jpashop.repository.order.simplequery.OrderSimpleQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,6 +24,8 @@ public class OrderSimpleApiController {
 
     private final OrderRepository orderRepository;
 
+    private final OrderSimpleQueryRepository orderSimpleQueryRepository;
+
     @GetMapping("/api/v1/simple-orders")
     public List<Order> ordersV1(){
         List<Order> orders = orderRepository.findAll(new OrderSearch());
@@ -38,9 +38,9 @@ public class OrderSimpleApiController {
     }
 
     @GetMapping("/api/v2/simple-orders")
-    public List<SimpleOrderDto> ordersV2(){ //DTO로 바꿔서 보내자
+    public List<OrderSimpleQueryDto> ordersV2(){ //DTO로 바꿔서 보내자
         List<Order> orders = orderRepository.findAll(new OrderSearch());
-        List<SimpleOrderDto> result = orders.stream().map(o -> new SimpleOrderDto(o))
+        List<OrderSimpleQueryDto> result = orders.stream().map(o -> new OrderSimpleQueryDto(o))
                 .collect(Collectors.toList());
         return result;
     }
@@ -54,37 +54,34 @@ public class OrderSimpleApiController {
     // LAZY 로딩이 아닌 EAGER로 바꾸면 훨씬 더 많은 쿼리가 실행되기 때문에 EAGER로 바꾸는 건 좋은 해결책이 아니다.
     // LAZY 로딩을 해야 영속성 컨텍스트에서 데이터를 가져올 수 있기 때문에 실행되는 쿼리수를 줄일 수 있다.
     // N + 1 문제는 fetch join을 통해서 해결할 수 있다.
-    /*
-
-     */
-
 
     @GetMapping("/api/v3/simple-orders")
-    public List<SimpleOrderDto> ordersV3(){
+    public List<OrderSimpleQueryDto> ordersV3(){
         List<Order> orders = orderRepository.findWithMemberDelivery(); //메소드에서 fetch join
-        List<SimpleOrderDto> result = orders.stream()
-                .map(o -> new SimpleOrderDto(o))
+        List<OrderSimpleQueryDto> result = orders.stream()
+                .map(o -> new OrderSimpleQueryDto(o))
                 .collect(Collectors.toList());
         return result;
     }
 
-
-    @Data
-    static class SimpleOrderDto{
-        private Long orderId;
-        private String name;
-        private LocalDateTime orderDate;
-        private OrderStatus orderStatus;
-        private Address address;
-
-        public SimpleOrderDto(Order order) {
-            orderId = order.getId();
-            name = order.getMember().getName(); // LAZY 초기화 -> 객체가 생성될 때 영속성 컨텍스트에서 데이터가 없으면 쿼리가 실행됨
-            orderDate = order.getOrderDate();
-            orderStatus = order.getStatus();
-            address = order.getDelivery().getAddress(); // LAZY 초기화 -> 객체가 생성될 때 영속성 컨텍스트에서 데이터가 없으면 쿼리가 실행됨
-
-
-        }
+    //위에 v3방법은 엔티티를 DTO로 변환하는 작업을 진행했는데 v4에서는 JPA에서 바로 DTO로 전환하는 방식을 사용
+    //쿼리는 v3 fetch join을 했을떄에 비해서 select 시 필요한 데이터만 select해온다
+    //그러나 v4방식은 재사용성이 떨어진다. -> DTO에 쿼리를 고정시켰기 때문, API스펙이 repository에 포함되게 된다. (JPQL내 객체를 생성하는 구문때문)
+    // -> API스펙이 변경되면 JPQL도 변경해야하는 문제 발생
+    // 성능은 v4, 재사용성은 v3가 좋다 -> 어떻게 선택해야할까??
+    /*
+    쿼리 방식 선택 권장 순서
+    1. 우선 엔티티를 DTO로 변환하는 방법을 선택한다. (v2)
+    2. 필요하면 페치조인으로 성능을 최적화한다 -> 대부분의 성능 이슈가 해결된다. (v3)
+    3. 그래도 안도면 DTO로 직접 조회하는 방법을 사용한다. (v4)
+    4. 최후의 방법은 JPA가 제공하는 네이티브 SQL이나 스프링 JDBC Template을 사용해서 SQL을 직접 사용한다.
+     */
+    @GetMapping("/api/v4/simple-orders")
+    public List<OrderSimpleQueryDto> ordersV4() {
+        return orderSimpleQueryRepository.findOrderDtos();
     }
+
+
+
+
 }
